@@ -1,0 +1,21 @@
+[project]
+name = "conversepdf"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.125.0",
+    "google-genai>=1.56.0",
+    "inngest>=0.5.13",
+    "llama-index-core>=0.14.10",
+    "llama-index-embeddings-gemini>=0.4.1",
+    "llama-index-llms-gemini>=0.6.1",
+    "llama-index-readers-file>=0.5.5",
+    "python-dotenv>=1.2.1",
+    "qdrant-client>=1.16.2",
+    "streamlit>=1.52.2",
+    "uvicorn>=0.38.0",
+]
+[tool.uv.extra-build-dependencies]
+ipython-cluster-helper = ["pip"]
