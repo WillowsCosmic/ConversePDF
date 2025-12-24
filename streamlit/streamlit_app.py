@@ -13,16 +13,28 @@ load_dotenv()
 st.set_page_config(page_title="ConversePDF", page_icon="📄", layout="centered")
 
 
-@st.cache_resource
-def get_inngest_client() -> inngest.Inngest:
-    return inngest.Inngest(
-        app_id="rag_app", 
-        is_production=True  # ← CHANGED: Always production on Render
+def send_rag_ingest_event(pdf_path: Path) -> None:
+    """Send ingestion event synchronously"""
+    event_key = os.getenv('INNGEST_EVENT_KEY')
+    
+    response = requests.post(
+        "https://api.inngest.com/v1/events",
+        headers={
+            "Authorization": f"Bearer {event_key}",
+            "Content-Type": "application/json"
+        },
+        json=[{
+            "name": "rag/converse_pdf",
+            "data": {
+                "pdf_path": str(pdf_path.resolve()),
+                "source_id": pdf_path.name,
+            }
+        }]
     )
+    response.raise_for_status()
 
 
 def save_uploaded_pdf(file) -> Path:
-    # Use /tmp for serverless environments
     uploads_dir = Path("/tmp/uploads")
     uploads_dir.mkdir(parents=True, exist_ok=True)
     file_path = uploads_dir / file.name
@@ -31,26 +43,13 @@ def save_uploaded_pdf(file) -> Path:
     return file_path
 
 
-async def send_rag_ingest_event(pdf_path: Path) -> None:
-    client = get_inngest_client()
-    await client.send(
-        inngest.Event(
-            name="rag/converse_pdf",
-            data={
-                "pdf_path": str(pdf_path.resolve()),
-                "source_id": pdf_path.name,
-            },
-        )
-    )
-
-
 st.title("Upload a PDF to Ingest")
 uploaded = st.file_uploader("Choose a PDF", type=["pdf"], accept_multiple_files=False)
 
 if uploaded is not None:
     with st.spinner("Uploading and triggering ingestion..."):
         path = save_uploaded_pdf(uploaded)
-        asyncio.run(send_rag_ingest_event(path))
+        send_rag_ingest_event(path)  # ← CHANGED: Now synchronous
         time.sleep(0.3)
     st.success(f"Triggered ingestion for: {path.name}")
     st.caption("You can upload another PDF if you like.")
@@ -59,29 +58,37 @@ st.divider()
 st.title("Ask a question about your PDFs")
 
 
-async def send_rag_query_event(question: str, top_k: int) -> str:
-    client = get_inngest_client()
-    result = await client.send(
-        inngest.Event(
-            name="rag/query_pdf_ai",
-            data={
+def send_rag_query_event(question: str, top_k: int) -> str:
+    """Send query event synchronously and return event ID"""
+    event_key = os.getenv('INNGEST_EVENT_KEY')
+    
+    response = requests.post(
+        "https://api.inngest.com/v1/events",
+        headers={
+            "Authorization": f"Bearer {event_key}",
+            "Content-Type": "application/json"
+        },
+        json=[{
+            "name": "rag/query_pdf_ai",
+            "data": {
                 "question": question,
                 "top_k": top_k,
-            },
-        )
+            }
+        }]
     )
-    return result[0]
+    response.raise_for_status()
+    result = response.json()
+    return result["ids"][0]
 
 
 def _inngest_api_base() -> str:
-    # ← CHANGED: Always use production API
     return "https://api.inngest.com/v1"
 
 
 def fetch_runs(event_id: str) -> list[dict]:
     url = f"{_inngest_api_base()}/events/{event_id}/runs"
     headers = {
-        "Authorization": f"Bearer {os.getenv('INNGEST_EVENT_KEY')}"  # ← CHANGED: Always use auth
+        "Authorization": f"Bearer {os.getenv('INNGEST_EVENT_KEY')}"
     }
     
     resp = requests.get(url, headers=headers)
@@ -115,7 +122,7 @@ with st.form("rag_query_form"):
 
     if submitted and question.strip():
         with st.spinner("Sending event and generating answer..."):
-            event_id = asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
+            event_id = send_rag_query_event(question.strip(), int(top_k))  # ← CHANGED: Now synchronous
             output = wait_for_run_output(event_id)
             answer = output.get("answer", "")
             sources = output.get("sources", [])
