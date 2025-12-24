@@ -17,13 +17,13 @@ st.set_page_config(page_title="ConversePDF", page_icon="📄", layout="centered"
 def get_inngest_client() -> inngest.Inngest:
     return inngest.Inngest(
         app_id="rag_app", 
-        is_production=os.getenv("VERCEL_ENV") == "production"  # ← CHANGED
+        is_production=True  # ← CHANGED: Always production on Render
     )
 
 
 def save_uploaded_pdf(file) -> Path:
-    # Use /tmp for serverless environments like Vercel
-    uploads_dir = Path("/tmp/uploads")  # ← CHANGED
+    # Use /tmp for serverless environments
+    uploads_dir = Path("/tmp/uploads")
     uploads_dir.mkdir(parents=True, exist_ok=True)
     file_path = uploads_dir / file.name
     file_bytes = file.getbuffer()
@@ -35,7 +35,7 @@ async def send_rag_ingest_event(pdf_path: Path) -> None:
     client = get_inngest_client()
     await client.send(
         inngest.Event(
-            name="rag/converse_pdf",  # ← CHANGED (match your function trigger)
+            name="rag/converse_pdf",
             data={
                 "pdf_path": str(pdf_path.resolve()),
                 "source_id": pdf_path.name,
@@ -50,9 +50,7 @@ uploaded = st.file_uploader("Choose a PDF", type=["pdf"], accept_multiple_files=
 if uploaded is not None:
     with st.spinner("Uploading and triggering ingestion..."):
         path = save_uploaded_pdf(uploaded)
-        # Kick off the event and block until the send completes
         asyncio.run(send_rag_ingest_event(path))
-        # Small pause for user feedback continuity
         time.sleep(0.3)
     st.success(f"Triggered ingestion for: {path.name}")
     st.caption("You can upload another PDF if you like.")
@@ -61,7 +59,7 @@ st.divider()
 st.title("Ask a question about your PDFs")
 
 
-async def send_rag_query_event(question: str, top_k: int) -> None:
+async def send_rag_query_event(question: str, top_k: int) -> str:
     client = get_inngest_client()
     result = await client.send(
         inngest.Event(
@@ -72,26 +70,21 @@ async def send_rag_query_event(question: str, top_k: int) -> None:
             },
         )
     )
-
     return result[0]
 
 
 def _inngest_api_base() -> str:
-    # Use production Inngest API when deployed, local dev server otherwise
-    if os.getenv("VERCEL_ENV") == "production":  # ← ADDED
-        return "https://api.inngest.com/v1"  # ← ADDED
-    return os.getenv("INNGEST_API_BASE", "http://127.0.0.1:8288/v1")
+    # ← CHANGED: Always use production API
+    return "https://api.inngest.com/v1"
 
 
 def fetch_runs(event_id: str) -> list[dict]:
     url = f"{_inngest_api_base()}/events/{event_id}/runs"
-    headers = {}
+    headers = {
+        "Authorization": f"Bearer {os.getenv('INNGEST_EVENT_KEY')}"  # ← CHANGED: Always use auth
+    }
     
-    # Add auth for production
-    if os.getenv("VERCEL_ENV") == "production":  # ← ADDED
-        headers["Authorization"] = f"Bearer {os.getenv('INNGEST_EVENT_KEY')}"  # ← ADDED
-    
-    resp = requests.get(url, headers=headers)  # ← CHANGED
+    resp = requests.get(url, headers=headers)
     resp.raise_for_status()
     data = resp.json()
     return data.get("data", [])
@@ -122,9 +115,7 @@ with st.form("rag_query_form"):
 
     if submitted and question.strip():
         with st.spinner("Sending event and generating answer..."):
-           
             event_id = asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
-            
             output = wait_for_run_output(event_id)
             answer = output.get("answer", "")
             sources = output.get("sources", [])
