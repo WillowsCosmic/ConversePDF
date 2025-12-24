@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+.env
+.venv
+venv/
+.vscode/
+.git/
+*.log
+uploads/
+qdrant_storage/
+.python-version
+notes.md
+requiredLibraries.txt
+prev codes.txt

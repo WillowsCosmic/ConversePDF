@@ -1,12 +1,20 @@
 # Connect the vector database
-
+import os
+from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct
 
+load_dotenv()
+
 
 class QdrantStorage:
-    def __init__(self, url="http://localhost:6333", collection="docs_gemini", dim=768):
-        self.client = QdrantClient(url=url, timeout=30)
+    def __init__(self, url=None, api_key=None, collection="docs_gemini", dim=768):
+        # Read from environment variables if not provided
+        url = url or os.getenv("QDRANT_URL", "http://localhost:6333")
+        api_key = api_key or os.getenv("QDRANT_API_KEY")
+        
+        # Connect to Qdrant (cloud or local)
+        self.client = QdrantClient(url=url, api_key=api_key, timeout=30)
         self.collection = collection
         
         if not self.client.collection_exists(self.collection):
@@ -23,15 +31,21 @@ class QdrantStorage:
         self.client.upsert(collection_name=self.collection, points=points)
     
     def search(self, query_vector, top_k: int = 5):
-        results = self.client.search(
-            collection_name=self.collection,
-            query_vector=query_vector,
-            with_payload=True,
-            limit=top_k
-        )
+        from qdrant_client.models import QueryRequest
         
-        context = []  # Information 
-        sources = set()  # From where the info is pulled from
+        results = self.client.query_batch_points(
+            collection_name=self.collection,
+            requests=[
+                QueryRequest(
+                    query=query_vector,
+                    limit=top_k,
+                    with_payload=True
+                )
+            ]
+        )[0].points
+        
+        context = []
+        sources = set()
 
         for r in results:
             payload = getattr(r, "payload", None) or {}

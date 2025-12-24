@@ -13,6 +13,7 @@ dependencies = [
     "llama-index-embeddings-gemini>=0.4.1",
     "llama-index-llms-gemini>=0.6.1",
     "llama-index-readers-file>=0.5.5",
+    "mangum>=0.19.0",
     "python-dotenv>=1.2.1",
     "qdrant-client>=1.16.2",
     "streamlit>=1.52.2",

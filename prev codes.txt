@@ -1,0 +1,52 @@
+
+
+# Connect the vector database
+
+from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance, PointStruct
+
+
+class QdrantStorage:
+    def __init__(self, url="http://localhost:6333", collection="docs_gemini", dim=768):
+        self.client = QdrantClient(url=url, timeout=30)
+        self.collection = collection
+        
+        if not self.client.collection_exists(self.collection):
+            self.client.create_collection(
+                collection_name=self.collection,
+                vectors_config=VectorParams(size=dim, distance=Distance.COSINE)
+            )
+    
+    def upsert(self, ids, vectors, payloads):
+        points = [
+            PointStruct(id=ids[i], vector=vectors[i], payload=payloads[i]) 
+            for i in range(len(ids))
+        ]
+        self.client.upsert(collection_name=self.collection, points=points)
+    
+    def search(self, query_vector, top_k: int = 5):
+        from qdrant_client.models import QueryRequest
+        
+        results = self.client.query_batch_points(
+            collection_name=self.collection,
+            requests=[
+                QueryRequest(
+                    query=query_vector,
+                    limit=top_k,
+                    with_payload=True
+                )
+            ]
+        )[0].points
+        
+        context = []
+        sources = set()
+
+        for r in results:
+            payload = getattr(r, "payload", None) or {}
+            text = payload.get("text", "")
+            source = payload.get("source", "")
+            if text:
+                context.append(text)
+                sources.add(source)
+
+        return {"contexts": context, "sources": list(sources)}
