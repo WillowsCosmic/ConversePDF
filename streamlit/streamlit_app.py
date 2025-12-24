@@ -16,18 +16,18 @@ st.set_page_config(page_title="ConversePDF", page_icon="📄", layout="centered"
 def send_rag_ingest_event(pdf_path: Path) -> None:
     event_key = os.getenv('INNGEST_EVENT_KEY')
     response = requests.post(
-        "https://api.inngest.com/v1/events",
+        f"https://inn.gs/e/{event_key}",  # ← FIXED endpoint
         headers={
-            "Authorization": f"Bearer {event_key}",
             "Content-Type": "application/json"
         },
-        json=[{
+        json={
             "name": "rag/converse_pdf",
             "data": {
                 "pdf_path": str(pdf_path.resolve()),
                 "source_id": pdf_path.name,
-            }
-        }]
+            },
+            "ts": int(time.time() * 1000)
+        }
     )
     response.raise_for_status()
 
@@ -59,18 +59,18 @@ st.title("Ask a question about your PDFs")
 def send_rag_query_event(question: str, top_k: int) -> str:
     event_key = os.getenv('INNGEST_EVENT_KEY')
     response = requests.post(
-        "https://api.inngest.com/v1/events",
+        f"https://inn.gs/e/{event_key}",  # ← FIXED endpoint
         headers={
-            "Authorization": f"Bearer {event_key}",
             "Content-Type": "application/json"
         },
-        json=[{
+        json={
             "name": "rag/query_pdf_ai",
             "data": {
                 "question": question,
                 "top_k": top_k,
-            }
-        }]
+            },
+            "ts": int(time.time() * 1000)
+        }
     )
     response.raise_for_status()
     result = response.json()
@@ -79,7 +79,7 @@ def send_rag_query_event(question: str, top_k: int) -> str:
 
 def fetch_runs(event_id: str) -> list[dict]:
     url = f"https://api.inngest.com/v1/events/{event_id}/runs"
-    headers = {"Authorization": f"Bearer {os.getenv('INNGEST_EVENT_KEY')}"}
+    headers = {"Authorization": f"Bearer {os.getenv('INNGEST_SIGNING_KEY')}"}
     resp = requests.get(url, headers=headers)
     resp.raise_for_status()
     data = resp.json()
