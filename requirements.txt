@@ -7,4 +7,4 @@ pypdf==3.17.1
 qdrant-client==1.7.0
 pydantic==2.5.0
 requests==2.31.0
-inngest==0.3.2
+inngest>=0.4.0
