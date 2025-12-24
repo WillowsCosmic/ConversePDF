@@ -14,9 +14,7 @@ st.set_page_config(page_title="ConversePDF", page_icon="📄", layout="centered"
 
 
 def send_rag_ingest_event(pdf_path: Path) -> None:
-    """Send ingestion event synchronously"""
     event_key = os.getenv('INNGEST_EVENT_KEY')
-    
     response = requests.post(
         "https://api.inngest.com/v1/events",
         headers={
@@ -49,7 +47,7 @@ uploaded = st.file_uploader("Choose a PDF", type=["pdf"], accept_multiple_files=
 if uploaded is not None:
     with st.spinner("Uploading and triggering ingestion..."):
         path = save_uploaded_pdf(uploaded)
-        send_rag_ingest_event(path)  # ← CHANGED: Now synchronous
+        send_rag_ingest_event(path)
         time.sleep(0.3)
     st.success(f"Triggered ingestion for: {path.name}")
     st.caption("You can upload another PDF if you like.")
@@ -59,9 +57,7 @@ st.title("Ask a question about your PDFs")
 
 
 def send_rag_query_event(question: str, top_k: int) -> str:
-    """Send query event synchronously and return event ID"""
     event_key = os.getenv('INNGEST_EVENT_KEY')
-    
     response = requests.post(
         "https://api.inngest.com/v1/events",
         headers={
@@ -81,16 +77,9 @@ def send_rag_query_event(question: str, top_k: int) -> str:
     return result["ids"][0]
 
 
-def _inngest_api_base() -> str:
-    return "https://api.inngest.com/v1"
-
-
 def fetch_runs(event_id: str) -> list[dict]:
-    url = f"{_inngest_api_base()}/events/{event_id}/runs"
-    headers = {
-        "Authorization": f"Bearer {os.getenv('INNGEST_EVENT_KEY')}"
-    }
-    
+    url = f"https://api.inngest.com/v1/events/{event_id}/runs"
+    headers = {"Authorization": f"Bearer {os.getenv('INNGEST_EVENT_KEY')}"}
     resp = requests.get(url, headers=headers)
     resp.raise_for_status()
     data = resp.json()
@@ -122,7 +111,7 @@ with st.form("rag_query_form"):
 
     if submitted and question.strip():
         with st.spinner("Sending event and generating answer..."):
-            event_id = send_rag_query_event(question.strip(), int(top_k))  # ← CHANGED: Now synchronous
+            event_id = send_rag_query_event(question.strip(), int(top_k))
             output = wait_for_run_output(event_id)
             answer = output.get("answer", "")
             sources = output.get("sources", [])
