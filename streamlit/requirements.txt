@@ -1,3 +1,4 @@
 streamlit
-requests
+inngest
 python-dotenv
+requests
