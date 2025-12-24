@@ -16,7 +16,7 @@ st.set_page_config(page_title="ConversePDF", page_icon="📄", layout="centered"
 def send_rag_ingest_event(pdf_path: Path) -> None:
     event_key = os.getenv('INNGEST_EVENT_KEY')
     response = requests.post(
-        f"https://inn.gs/e/{event_key}",  # ← FIXED endpoint
+        f"https://inn.gs/e/{event_key}",
         headers={
             "Content-Type": "application/json"
         },
@@ -25,8 +25,7 @@ def send_rag_ingest_event(pdf_path: Path) -> None:
             "data": {
                 "pdf_path": str(pdf_path.resolve()),
                 "source_id": pdf_path.name,
-            },
-            "ts": int(time.time() * 1000)
+            }
         }
     )
     response.raise_for_status()
@@ -48,18 +47,16 @@ if uploaded is not None:
     with st.spinner("Uploading and triggering ingestion..."):
         path = save_uploaded_pdf(uploaded)
         send_rag_ingest_event(path)
-        time.sleep(0.3)
     st.success(f"Triggered ingestion for: {path.name}")
-    st.caption("You can upload another PDF if you like.")
 
 st.divider()
 st.title("Ask a question about your PDFs")
 
 
-def send_rag_query_event(question: str, top_k: int) -> str:
+def send_rag_query_event(question: str, top_k: int):
     event_key = os.getenv('INNGEST_EVENT_KEY')
     response = requests.post(
-        f"https://inn.gs/e/{event_key}",  # ← FIXED endpoint
+        f"https://inn.gs/e/{event_key}",
         headers={
             "Content-Type": "application/json"
         },
@@ -68,40 +65,10 @@ def send_rag_query_event(question: str, top_k: int) -> str:
             "data": {
                 "question": question,
                 "top_k": top_k,
-            },
-            "ts": int(time.time() * 1000)
+            }
         }
     )
     response.raise_for_status()
-    result = response.json()
-    return result["ids"][0]
-
-
-def fetch_runs(event_id: str) -> list[dict]:
-    url = f"https://api.inngest.com/v1/events/{event_id}/runs"
-    headers = {"Authorization": f"Bearer {os.getenv('INNGEST_SIGNING_KEY')}"}
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    data = resp.json()
-    return data.get("data", [])
-
-
-def wait_for_run_output(event_id: str, timeout_s: float = 120.0, poll_interval_s: float = 0.5) -> dict:
-    start = time.time()
-    last_status = None
-    while True:
-        runs = fetch_runs(event_id)
-        if runs:
-            run = runs[0]
-            status = run.get("status")
-            last_status = status or last_status
-            if status in ("Completed", "Succeeded", "Success", "Finished"):
-                return run.get("output") or {}
-            if status in ("Failed", "Cancelled"):
-                raise RuntimeError(f"Function run {status}")
-        if time.time() - start > timeout_s:
-            raise TimeoutError(f"Timed out waiting for run output (last status: {last_status})")
-        time.sleep(poll_interval_s)
 
 
 with st.form("rag_query_form"):
@@ -110,15 +77,5 @@ with st.form("rag_query_form"):
     submitted = st.form_submit_button("Ask")
 
     if submitted and question.strip():
-        with st.spinner("Sending event and generating answer..."):
-            event_id = send_rag_query_event(question.strip(), int(top_k))
-            output = wait_for_run_output(event_id)
-            answer = output.get("answer", "")
-            sources = output.get("sources", [])
-
-        st.subheader("Answer")
-        st.write(answer or "(No answer)")
-        if sources:
-            st.caption("Sources")
-            for s in sources:
-                st.write(f"- {s}")
+        send_rag_query_event(question.strip(), int(top_k))
+        st.success("Query sent! Check Inngest dashboard for results.")
