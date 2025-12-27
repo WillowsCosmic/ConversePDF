@@ -1,4 +1,0 @@
-streamlit
-inngest
-python-dotenv
-requests

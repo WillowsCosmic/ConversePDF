@@ -10,9 +10,9 @@ from dotenv import load_dotenv
 import uuid
 import os
 import datetime
-from api.data_loader import load_and_chunk_pdf,embed_texts
-from api.vector_db import QdrantStorage
-from api.custom_types import RAGChunkAndSrc, RAGUpsertResult, RAGSearchResult, RAGQueryResult
+from data_loader import load_and_chunk_pdf,embed_texts
+from vector_db import QdrantStorage
+from custom_types import RAGChunkAndSrc, RAGUpsertResult, RAGSearchResult, RAGQueryResult
 from llama_index.llms.gemini import Gemini
 from llama_index.core.llms import ChatMessage
 
