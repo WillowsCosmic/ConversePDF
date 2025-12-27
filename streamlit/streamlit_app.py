@@ -53,22 +53,15 @@ st.divider()
 st.title("Ask a question about your PDFs")
 
 
-def send_rag_query_event(question: str, top_k: int):
-    event_key = os.getenv('INNGEST_EVENT_KEY')
+def query_rag(question: str, top_k: int) -> dict:
+    """Call the FastAPI /query endpoint directly"""
+    api_url = os.getenv('API_URL')  
     response = requests.post(
-        f"https://inn.gs/e/{event_key}",
-        headers={
-            "Content-Type": "application/json"
-        },
-        json={
-            "name": "rag/query_pdf_ai",
-            "data": {
-                "question": question,
-                "top_k": top_k,
-            }
-        }
+        f"{api_url}/query",
+        params={"question": question, "top_k": top_k}
     )
     response.raise_for_status()
+    return response.json()
 
 
 with st.form("rag_query_form"):
@@ -77,5 +70,20 @@ with st.form("rag_query_form"):
     submitted = st.form_submit_button("Ask")
 
     if submitted and question.strip():
-        send_rag_query_event(question.strip(), int(top_k))
-        st.success("Query sent! Check Inngest dashboard for results.")
+        with st.spinner("Generating answer..."):
+            try:
+                result = query_rag(question.strip(), int(top_k))
+                
+                st.subheader("Answer")
+                st.write(result.get("answer", "No answer"))
+                
+                sources = result.get("sources", [])
+                if sources:
+                    st.caption("Sources")
+                    for s in sources:
+                        st.write(f"- {s}")
+                        
+                st.caption(f"Retrieved context chunks")
+                
+            except Exception as e:
+                st.error(f"Error: {str(e)}")

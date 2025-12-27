@@ -2,7 +2,7 @@
 #We will use decorator to wrap the api endpoint
 
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import inngest
 import inngest.fast_api
 #from inngest.experimental import ai
@@ -117,6 +117,54 @@ async def rag_query_pdf_ai(ctx: inngest.Context):
 
 
 app = FastAPI()
+
+# Direct synchronous query endpoint
+@app.post("/query")
+async def query_endpoint(question: str, top_k: int = 5):
+    """Direct query endpoint - returns answer immediately"""
+    try:
+        # Search for relevant contexts
+        query_vec = embed_texts([question])[0]
+        store = QdrantStorage()
+        found = store.search(query_vec, top_k)
+        
+        contexts = found["contexts"]
+        sources = found["sources"]
+        
+        # Build prompt
+        context_block = "\n\n".join(f" {c}" for c in contexts)
+        user_content = (
+            "Use the following context to answer the question.\n\n"
+            f"Context:\n{context_block}\n\n"
+            f"Question: {question}\n"
+            "Answer concisely using the context above."
+        )
+        
+        # Generate answer with Gemini
+        adapter = Gemini(
+            api_key=os.getenv("GEMINI_API_KEY"),
+            model="gemini-2.5-flash",
+            temperature=0.2,
+            max_tokens=1024
+        )
+        
+        messages = [
+            ChatMessage(role="system", content="You will answer questions using only the provided context."),
+            ChatMessage(role="user", content=user_content),
+        ]
+        
+        res = await adapter.achat(messages)
+        answer = res.message.content
+        
+        return {
+            "answer": answer,
+            "sources": list(set(sources)), 
+            "num_contexts": len(contexts)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 inngest.fast_api.serve(app,inngest_client,[rag_converse_pdf,rag_query_pdf_ai]) #[] is the inngest function and will connect with the inngest dev server
 from mangum import Mangum
